@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#111827">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+  <title>My Gallery</title>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">MY PHOTOS</p>
+      <h1>Gallery</h1>
+    </div>
+    <label class="add-btn">
+      <input id="photoInput" type="file" accept="image/*" multiple>
+      <span>＋ Add</span>
+    </label>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div>
+        <h2>Your memories, in one place.</h2>
+        <p>Add photos from your phone and keep them inside this browser.</p>
+      </div>
+      <button id="clearBtn" class="clear-btn">Clear all</button>
+    </section>
+
+    <div id="gallery" class="gallery"></div>
+    <p id="empty" class="empty">No photos yet. Tap <b>＋ Add</b> to choose photos.</p>
+  </main>
+
+  <div id="viewer" class="viewer hidden">
+    <button id="closeViewer" class="close">×</button>
+    <img id="viewerImg" alt="Selected photo">
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

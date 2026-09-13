@@ -14,28 +14,64 @@
       <p class="eyebrow">MY PHOTOS</p>
       <h1>Gallery</h1>
     </div>
-    <label class="add-btn">
-      <input id="photoInput" type="file" accept="image/*" multiple>
-      <span>＋ Add</span>
-    </label>
+    <div class="top-actions">
+      <button id="themeBtn" class="icon-btn" title="Toggle theme">🌙</button>
+      <label class="add-btn">
+        <input id="photoInput" type="file" accept="image/*" multiple>
+        <span>＋ Add</span>
+      </label>
+    </div>
   </header>
 
   <main>
     <section class="hero">
       <div>
         <h2>Your memories, in one place.</h2>
-        <p>Add photos from your phone and keep them inside this browser.</p>
+        <p id="stats">No photos yet.</p>
       </div>
       <button id="clearBtn" class="clear-btn">Clear all</button>
     </section>
 
+    <section class="toolbar">
+      <input id="searchInput" class="search" type="search" placeholder="Search by name or tag…">
+      <select id="sortSelect" class="sort">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="name">Name (A–Z)</option>
+      </select>
+      <button id="favFilterBtn" class="chip-btn">★ Favorites</button>
+      <button id="selectBtn" class="chip-btn">Select</button>
+    </section>
+
+    <section id="bulkBar" class="bulk-bar hidden">
+      <span id="selectCount">0 selected</span>
+      <div class="bulk-actions">
+        <button id="bulkDownload">Download</button>
+        <button id="bulkDelete" class="danger">Delete</button>
+        <button id="bulkCancel">Cancel</button>
+      </div>
+    </section>
+
+    <div id="dropzone" class="dropzone hidden">Drop photos to add them</div>
     <div id="gallery" class="gallery"></div>
-    <p id="empty" class="empty">No photos yet. Tap <b>＋ Add</b> to choose photos.</p>
+    <p id="empty" class="empty">No photos yet. Tap <b>＋ Add</b> or drag photos here.</p>
+    <p id="noResults" class="empty hidden">No photos match your search.</p>
   </main>
 
   <div id="viewer" class="viewer hidden">
-    <button id="closeViewer" class="close">×</button>
+    <button id="closeViewer" class="v-btn close" title="Close">×</button>
+    <button id="prevBtn" class="v-btn nav prev" title="Previous">‹</button>
+    <button id="nextBtn" class="v-btn nav next" title="Next">›</button>
     <img id="viewerImg" alt="Selected photo">
+    <div class="viewer-bar">
+      <button id="viewerFav" class="v-btn" title="Favorite">☆</button>
+      <button id="viewerDownload" class="v-btn" title="Download">⬇</button>
+      <button id="viewerDelete" class="v-btn" title="Delete">🗑</button>
+    </div>
+    <div class="viewer-tags">
+      <div id="tagChips" class="tag-chips"></div>
+      <input id="tagInput" class="tag-input" placeholder="Add tag + Enter">
+    </div>
   </div>
 
   <script src="app.js"></script>

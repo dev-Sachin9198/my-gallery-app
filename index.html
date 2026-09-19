@@ -16,6 +16,9 @@
     </div>
     <div class="top-actions">
       <button id="themeBtn" class="icon-btn" title="Toggle theme">🌙</button>
+      <label class="compress-toggle" title="Compress photos before saving">
+     <input id="compressToggle" type="checkbox"> Compress
+       </label>
       <label class="add-btn">
         <input id="photoInput" type="file" accept="image/*" multiple>
         <span>＋ Add</span>
@@ -83,14 +86,48 @@
     <div class="viewer-bar">
       <button id="viewerFav" class="v-btn" title="Favorite">☆</button>
       <button id="viewerMove" class="v-btn" title="Move to album">📁</button>
+      <button id="viewerEdit" class="v-btn" title="Edit photo">✎</button>
       <button id="viewerDownload" class="v-btn" title="Download">⬇</button>
       <button id="viewerDelete" class="v-btn" title="Delete">🗑</button>
     </div>
     <div class="viewer-tags">
+      <input id="captionInput" class="caption-input" placeholder="Add a caption…">
       <div id="tagChips" class="tag-chips"></div>
       <input id="tagInput" class="tag-input" placeholder="Add tag + Enter">
     </div>
   </div>
+  <div id="editorModal" class="modal-overlay hidden">
+  <div class="editor-panel">
+    <div class="editor-canvas-wrap">
+      <canvas id="edCanvas"></canvas>
+      <div id="cropBox" class="crop-box hidden"></div>
+    </div>
+    <div class="editor-controls">
+      <div class="ed-row">
+        <button id="rotateLeft" class="chip-btn">⟲ Rotate</button>
+        <button id="rotateRight" class="chip-btn">⟳ Rotate</button>
+        <button id="resetCrop" class="chip-btn">Reset Crop</button>
+      </div>
+      <div class="ed-row filters">
+        <button class="filter-btn chip-btn active" data-filter="none">None</button>
+        <button class="filter-btn chip-btn" data-filter="bw">B&amp;W</button>
+        <button class="filter-btn chip-btn" data-filter="sepia">Sepia</button>
+        <button class="filter-btn chip-btn" data-filter="vintage">Vintage</button>
+      </div>
+      <label class="ed-slider">Brightness
+        <input id="brightnessSlider" type="range" min="50" max="150" value="100">
+      </label>
+      <label class="ed-slider">Contrast
+        <input id="contrastSlider" type="range" min="50" max="150" value="100">
+      </label>
+      <p class="ed-hint">Drag on the photo to crop.</p>
+      <div class="ed-row">
+        <button id="editorSave" class="chip-btn active">Save</button>
+        <button id="editorCancel" class="chip-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
 
   <script src="app.js"></script>
 </body>

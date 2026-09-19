@@ -71,7 +71,7 @@ async function addPhoto(file, albumId, order) {
     const tx = db.transaction(STORE, "readwrite");
     tx.objectStore(STORE).add({
       blob: file, name: file.name, created: Date.now(),
-      favorite: false, tags: [], albumId: albumId ?? null, order: order ?? Date.now()
+      favorite: false, tags: [], albumId: albumId ?? null, order: order ?? Date.now(), caption: ""
     });
     tx.oncomplete = resolve;
     tx.onerror = () => reject(tx.error);
@@ -83,7 +83,7 @@ async function getPhotos() {
   return new Promise((resolve, reject) => {
     const req = db.transaction(STORE, "readonly").objectStore(STORE).getAll();
     req.onsuccess = () => resolve(req.result.map(p => ({
-      favorite: false, tags: [], albumId: null, order: p.created, ...p
+    favorite: false, tags: [], albumId: null, order: p.created, caption: "", ...p
     })));
     req.onerror = () => reject(req.error);
   });
@@ -212,7 +212,7 @@ function albumDepth(id, depth = 0) {
 
 function matchesFilters(p, q) {
   if (favOnly && !p.favorite) return false;
-  if (q && !(p.name.toLowerCase().includes(q) || (p.tags || []).some(t => t.toLowerCase().includes(q)))) return false;
+  if (q && !(p.name.toLowerCase().includes(q) || (p.caption || "").toLowerCase().includes(q) || (p.tags || []).some(t => t.toLowerCase().includes(q)))) return false;
   return true;
 }
 
@@ -524,7 +524,10 @@ function toggleSelect(id) {
 // ---------- Upload ----------
 async function handleFiles(fileList) {
   const files = Array.from(fileList).filter(f => f.type.startsWith("image/"));
-  for (const file of files) await addPhoto(file, viewMode === "grid" ? currentAlbumId : null);
+  for (let file of files) {
+    if (compressToggle.checked) file = await compressImage(file);
+    await addPhoto(file, viewMode === "grid" ? currentAlbumId : null);
+  }
   await refreshAndRender();
 }
 
@@ -700,6 +703,7 @@ function showCurrentInViewer() {
   viewerImg.classList.remove("zoomed");
   viewerFav.textContent = photo.favorite ? "★" : "☆";
   viewerFav.classList.toggle("active", photo.favorite);
+  captionInput.value = photo.caption || "";
   renderTagChips(photo);
 }
 
@@ -810,10 +814,209 @@ viewer.addEventListener("touchend", (e) => {
   touchStartX = null;
 });
 
-// ---------- Service worker ----------
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js"));
+// ---------- Caption ----------
+const captionInput = document.getElementById("captionInput");
+captionInput.addEventListener("blur", async () => {
+  const photo = getViewerPhoto();
+  if (!photo) return;
+  photo.caption = captionInput.value;
+  await putPhoto(photo);
+  await refreshData();
+});
+captionInput.addEventListener("keydown", (e) => { if (e.key === "Enter") captionInput.blur(); });
+
+// ---------- Compression ----------
+const compressToggle = document.getElementById("compressToggle");
+compressToggle.checked = localStorage.getItem("gallery-compress") === "true";
+compressToggle.addEventListener("change", () => {
+  localStorage.setItem("gallery-compress", compressToggle.checked);
+});
+
+function compressImage(file, maxDim = 1920, quality = 0.82) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((blob) => {
+        resolve(blob ? new File([blob], file.name, { type: "image/jpeg" }) : file);
+      }, "image/jpeg", quality);
+    };
+    img.onerror = () => resolve(file);
+    img.src = url;
+  });
 }
+
+// ---------- Photo Editor ----------
+const editorModal = document.getElementById("editorModal");
+const edCanvas = document.getElementById("edCanvas");
+const cropBoxEl = document.getElementById("cropBox");
+const rotateLeftBtn = document.getElementById("rotateLeft");
+const rotateRightBtn = document.getElementById("rotateRight");
+const resetCropBtn = document.getElementById("resetCrop");
+const brightnessSlider = document.getElementById("brightnessSlider");
+const contrastSlider = document.getElementById("contrastSlider");
+const editorSave = document.getElementById("editorSave");
+const editorCancel = document.getElementById("editorCancel");
+const filterBtns = document.querySelectorAll(".filter-btn");
+
+let edImage = null;
+let edRotation = 0;
+let edFilterPreset = "none";
+let cropRect = null;
+let cropDragStart = null;
+let editingPhoto = null;
+
+document.getElementById("viewerEdit").onclick = () => {
+  const photo = getViewerPhoto();
+  if (photo) openEditor(photo);
+};
+
+function openEditor(photo) {
+  editingPhoto = photo;
+  edRotation = 0;
+  edFilterPreset = "none";
+  cropRect = null;
+  brightnessSlider.value = 100;
+  contrastSlider.value = 100;
+  filterBtns.forEach(b => b.classList.toggle("active", b.dataset.filter === "none"));
+  cropBoxEl.classList.add("hidden");
+  edImage = new Image();
+  edImage.onload = () => drawEditorCanvas();
+  edImage.src = urlFor(photo);
+  editorModal.classList.remove("hidden");
+}
+
+function filterString() {
+  let f = `brightness(${brightnessSlider.value}%) contrast(${contrastSlider.value}%)`;
+  if (edFilterPreset === "bw") f += " grayscale(100%)";
+  else if (edFilterPreset === "sepia") f += " sepia(100%)";
+  else if (edFilterPreset === "vintage") f += " sepia(50%) saturate(140%) contrast(90%) brightness(95%)";
+  return f;
+}
+
+function drawEditorCanvas() {
+  if (!edImage) return;
+  const swapped = edRotation % 180 !== 0;
+  const w = swapped ? edImage.height : edImage.width;
+  const h = swapped ? edImage.width : edImage.height;
+  edCanvas.width = w;
+  edCanvas.height = h;
+  const ctx = edCanvas.getContext("2d");
+  ctx.clearRect(0, 0, w, h);
+  ctx.save();
+  ctx.filter = filterString();
+  ctx.translate(w / 2, h / 2);
+  ctx.rotate((edRotation * Math.PI) / 180);
+  ctx.drawImage(edImage, -edImage.width / 2, -edImage.height / 2);
+  ctx.restore();
+}
+
+rotateLeftBtn.onclick = () => { edRotation = (edRotation + 270) % 360; cropRect = null; cropBoxEl.classList.add("hidden"); drawEditorCanvas(); };
+rotateRightBtn.onclick = () => { edRotation = (edRotation + 90) % 360; cropRect = null; cropBoxEl.classList.add("hidden"); drawEditorCanvas(); };
+
+filterBtns.forEach(btn => {
+  btn.onclick = () => {
+    edFilterPreset = btn.dataset.filter;
+    filterBtns.forEach(b => b.classList.toggle("active", b === btn));
+    drawEditorCanvas();
+  };
+});
+
+brightnessSlider.oninput = drawEditorCanvas;
+contrastSlider.oninput = drawEditorCanvas;
+resetCropBtn.onclick = () => { cropRect = null; cropBoxEl.classList.add("hidden"); };
+
+function pointFromEvent(e) {
+  const rect = edCanvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return {
+    x: Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)),
+    y: Math.min(1, Math.max(0, (clientY - rect.top) / rect.height))
+  };
+}
+
+function updateCropBoxEl(x0, y0, x1, y1) {
+  const rect = edCanvas.getBoundingClientRect();
+  const wrapRect = edCanvas.parentElement.getBoundingClientRect();
+  const left = rect.left - wrapRect.left + Math.min(x0, x1) * rect.width;
+  const top = rect.top - wrapRect.top + Math.min(y0, y1) * rect.height;
+  const w = Math.abs(x1 - x0) * rect.width;
+  const h = Math.abs(y1 - y0) * rect.height;
+  cropBoxEl.style.left = `${left}px`;
+  cropBoxEl.style.top = `${top}px`;
+  cropBoxEl.style.width = `${w}px`;
+  cropBoxEl.style.height = `${h}px`;
+  cropBoxEl.classList.remove("hidden");
+}
+
+function startCropDrag(e) { cropDragStart = pointFromEvent(e); }
+function moveCropDrag(e) {
+  if (!cropDragStart) return;
+  e.preventDefault();
+  const p = pointFromEvent(e);
+  updateCropBoxEl(cropDragStart.x, cropDragStart.y, p.x, p.y);
+  cropRect = {
+    x0: Math.min(cropDragStart.x, p.x), y0: Math.min(cropDragStart.y, p.y),
+    x1: Math.max(cropDragStart.x, p.x), y1: Math.max(cropDragStart.y, p.y)
+  };
+}
+function endCropDrag() { cropDragStart = null; }
+
+edCanvas.addEventListener("mousedown", startCropDrag);
+edCanvas.addEventListener("mousemove", moveCropDrag);
+window.addEventListener("mouseup", endCropDrag);
+edCanvas.addEventListener("touchstart", startCropDrag);
+edCanvas.addEventListener("touchmove", moveCropDrag);
+edCanvas.addEventListener("touchend", endCropDrag);
+
+editorCancel.onclick = closeEditor;
+editorModal.addEventListener("click", (e) => { if (e.target === editorModal) closeEditor(); });
+
+function closeEditor() {
+  editorModal.classList.add("hidden");
+  editingPhoto = null;
+  edImage = null;
+}
+
+editorSave.onclick = () => {
+  let sourceCanvas = edCanvas;
+  if (cropRect && (cropRect.x1 - cropRect.x0 > 0.02) && (cropRect.y1 - cropRect.y0 > 0.02)) {
+    const sx = cropRect.x0 * edCanvas.width;
+    const sy = cropRect.y0 * edCanvas.height;
+    const sw = (cropRect.x1 - cropRect.x0) * edCanvas.width;
+    const sh = (cropRect.y1 - cropRect.y0) * edCanvas.height;
+    const cropCanvas = document.createElement("canvas");
+    cropCanvas.width = sw;
+    cropCanvas.height = sh;
+    cropCanvas.getContext("2d").drawImage(edCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+    sourceCanvas = cropCanvas;
+  }
+  sourceCanvas.toBlob(async (blob) => {
+    if (!blob) return;
+    editingPhoto.blob = blob;
+    await putPhoto(editingPhoto);
+    revokeUrl(editingPhoto.id);
+    closeEditor();
+    await refreshData();
+    render();
+    updateStats();
+    if (!viewer.classList.contains("hidden")) showCurrentInViewer();
+  }, "image/jpeg", 0.9);
+};
+
+// ---------- Service worker ----------
 
 // ---------- Init ----------
 refreshAndRender();

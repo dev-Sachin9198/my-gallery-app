@@ -1,4 +1,4 @@
-const CACHE = "gallery-v3";
+const CACHE = "gallery-v4";
 const FILES = ["./", "./index.html", "./style.css", "./app.js", "./manifest.json"];
 
 self.addEventListener("install", e => {
